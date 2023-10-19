@@ -5,10 +5,15 @@ import com.kh.demo1.domain.svc.ProductSVC;
 import com.kh.demo1.web.api.ApiResponse;
 import com.kh.demo1.web.req.product.ReqSave;
 import com.kh.demo1.web.req.product.ReqUpdate;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Controller;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,24 +27,35 @@ import java.util.Optional;
 public class ApiProductController {
 
   private final ProductSVC productSVC;
+  private MessageSource messageSource;
 
   //초기화면
   @GetMapping
-  public String init(){
-    return "/api/product/init";
-  }
+  public String init(){    return "/api/product/init";  }
 
   // 등록
   @ResponseBody
   @PostMapping        // post http://localhost:9080/api/products
   public ApiResponse<Product> add(
       @RequestBody  // 요청메세지 바디를 직접 읽음
-      ReqSave reqSave){
+          @Valid  ReqSave reqSave, BindingResult bindingResult){
     log.info("reqSave={}", reqSave);
     ApiResponse<Product> res = null;
 
+    // 유효성 검증
+    if(bindingResult.hasErrors()){
+      log.info("bindingResult={}", bindingResult);
+      StringBuffer errMsg = new StringBuffer();
+      for (ObjectError objectError:bindingResult.getAllErrors()){
+        String localizedErrMsg = messageSource.getMessage(objectError.getCode(),new String[]{null, "1", "10"}, LocaleContextHolder.getLocale());
+        errMsg.append(objectError.getDefaultMessage()).append(";");         // 오류메세지1; 오류메세지2; 오류메세지3;...
+      }
+      res = ApiResponse.createApiResponse("99", errMsg.toString(), null);
+      return res;
+    }
+
     Product product = new Product();
-    BeanUtils.copyProperties(reqSave, product); // reqSave의 프로퍼티를 product에 복사
+    BeanUtils.copyProperties(reqSave, product); // reqSave 의 프로퍼티를 product 에 복사
 
     // 등록
     Long productId = productSVC.save(product);
