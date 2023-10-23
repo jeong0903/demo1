@@ -1,5 +1,6 @@
 package com.kh.demo1.web;
 
+import com.kh.demo1.common.MyUtil;
 import com.kh.demo1.domain.dao.entity.Product;
 import com.kh.demo1.domain.svc.ProductSVC;
 import com.kh.demo1.web.api.ApiResponse;
@@ -10,10 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.BindingResult;
-import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,40 +26,53 @@ import java.util.Optional;
 public class ApiProductController {
 
   private final ProductSVC productSVC;
-  private MessageSource messageSource;
+  private final MessageSource messageSource;
 
   //초기화면
   @GetMapping
-  public String init(){    return "/api/product/init";  }
+  public String init(){
+    return "/api/product/init";
+  }
 
-  // 등록
+  //등록
   @ResponseBody
-  @PostMapping        // post http://localhost:9080/api/products
-  public ApiResponse<Product> add(
-      @RequestBody  // 요청메세지 바디를 직접 읽음
-          @Valid  ReqSave reqSave, BindingResult bindingResult){
-    log.info("reqSave={}", reqSave);
-    ApiResponse<Product> res = null;
+  @PostMapping                        // post http://localhost:9080/api/products
+  public ApiResponse<Object> add(
+          @RequestBody  //요청메세지 바디를 직접 읽음
+          @Valid ReqSave reqSave, BindingResult bindingResult){
+    log.info("reqSave={}",reqSave);
+    ApiResponse<Object> res = null;
 
-    // 유효성 검증
-    if(bindingResult.hasErrors()){
+    // 요청데이터 유효성 체크
+    // 1. 필드 기반 검증 ( 어노테이션 + 코드)
+    // 1.1 필드오류 , 상품수량 1000 초과 불가
+    if(reqSave.getQuantity() > 1000) {
+      bindingResult.rejectValue("quantity","product",new Object[]{1000},null);
+    }
+
+    if (bindingResult.hasErrors()) {
       log.info("bindingResult={}", bindingResult);
-      StringBuffer errMsg = new StringBuffer();
-      for (ObjectError objectError:bindingResult.getAllErrors()){
-        String localizedErrMsg = messageSource.getMessage(objectError.getCode(),new String[]{null, "1", "10"}, LocaleContextHolder.getLocale());
-        errMsg.append(objectError.getDefaultMessage()).append(";");         // 오류메세지1; 오류메세지2; 오류메세지3;...
-      }
-      res = ApiResponse.createApiResponse("99", errMsg.toString(), null);
-      return res;
+      return MyUtil.validChkApiReq(bindingResult);
+    }
+
+    // 2. 글로벌 오류(2개 이상 필드 크로스검증)
+    // 2.1 총액(상품수량 * 단가) 1000만원 초과 금지
+    if(reqSave.getQuantity() * reqSave.getPrice() > 10_000_000L) {
+      bindingResult.reject("totalPrice",new Object[]{1000},null);
+    }
+
+    if (bindingResult.hasErrors()) {
+      log.info("bindingResult={}", bindingResult);
+      return MyUtil.validChkApiReq(bindingResult);
     }
 
     Product product = new Product();
-    BeanUtils.copyProperties(reqSave, product); // reqSave 의 프로퍼티를 product 에 복사
+    BeanUtils.copyProperties(reqSave, product); // 객체간 속성 복사
 
-    // 등록
+    //등록
     Long productId = productSVC.save(product);
 
-    // 응답 메세지 바디
+    //응답메시지 바디
     Optional<Product> optionalProduct = productSVC.findById(productId);
     Product savedProduct = optionalProduct.get();
     res = ApiResponse.createApiResponse("00", "success", savedProduct);
@@ -85,47 +97,67 @@ public class ApiProductController {
     return res;
   }
 
-  // 수정
+  //수정
   @ResponseBody
-  @PatchMapping("/{pid}")          // patch http://localhost:9080/api/products/123
-  public ApiResponse<Product> update(
-      @PathVariable Long pid,
-      @RequestBody ReqUpdate reqUpdate){
-    log.info("reqUpdate={}", reqUpdate);
-    ApiResponse<Product> res = null;
+  @PatchMapping("/{pid}")         // patch http://localhost:9080/api/products/123
+  public ApiResponse<Object> update(
+          @PathVariable Long pid,
+          @Valid @RequestBody ReqUpdate reqUpdate,
+          BindingResult bindingResult){
+    log.info("reqUpdate={}",reqUpdate);
+    ApiResponse<Object> res = null;
+
+    // 1. 필드 기반 검증 ( 어노테이션 + 코드)
+    // 1.1 필드오류 , 상품수량 1000 초과 불가
+    if(reqUpdate.getQuantity() > 1000) {
+      bindingResult.rejectValue("quantity","product",new Object[]{1000},null);
+    }
+    if (bindingResult.hasErrors()) {
+      log.info("bindingResult={}", bindingResult);
+      return MyUtil.validChkApiReq(bindingResult);
+    }
+    // 2. 글로벌 오류(2개 이상 필드 크로스검증)
+    // 2.1 총액(상품수량 * 단가) 1000만원 초과 금지
+    if(reqUpdate.getQuantity() * reqUpdate.getPrice() > 10_000_000L) {
+      bindingResult.reject("totalPrice",new Object[]{1000},null);
+    }
+    if (bindingResult.hasErrors()) {
+      log.info("bindingResult={}", bindingResult);
+      return MyUtil.validChkApiReq(bindingResult);
+    }
 
     Product product = new Product();
     BeanUtils.copyProperties(reqUpdate, product);
     int row = productSVC.updateById(pid, product);
 
-    if(row == 1) {
+    if(row == 1){
       Product findedProduct = productSVC.findById(pid).get();
-      res = ApiResponse.createApiResponse("00", "success", findedProduct);
-    } else{
-      res = ApiResponse.createApiResponse("99", "fail", null);
+      res = ApiResponse.createApiResponse("00","success",findedProduct);
+    }else{
+      res = ApiResponse.createApiResponse("99","fail",null);
     }
 
     return res;
   }
 
-  // 삭제
+  //삭제
   @ResponseBody
-  @DeleteMapping("/{pid}")         // delete http://localhost:9080/api/products/123
-  public ApiResponse<String> delete(      @PathVariable Long pid){
+  @DeleteMapping("/{pid}")        // delete http://localhost:9080/api/products/123
+  public ApiResponse<String> delete( @PathVariable Long pid){
     ApiResponse<String> res = null;
 
     int row = productSVC.deleteById(pid);
-    if (row == 1){
-      res = ApiResponse.createApiResponse("00", "success", null);
+    if(row == 1){
+      res = ApiResponse.createApiResponse("00","success",null);
     }else{
-      res = ApiResponse.createApiResponse("99", "fail", null);
+      res = ApiResponse.createApiResponse("99","fail",null);
     }
     return res;
   }
 
   //목록
   @ResponseBody
-  @GetMapping("/all")              // get http://localhost:9080/api/products/all
+  @GetMapping("/all")                // get http://localhost:9080/api/products/all
   public ApiResponse<List<Product>> all(){
     ApiResponse<List<Product>> res = null;
     List<Product> products = productSVC.findAll();
