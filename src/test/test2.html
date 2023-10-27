@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script type="module">
+        const fruits = ['apple', 'banana', 'orange', 'melon']
+        const $ul = document.createElement('ul');
+
+        fruits.forEach((fruit, idx) => {
+            const $li = document.createElement('li');
+            $li.textContent = fruit;
+            $li.setAttribute('id', 'fruit'+(idx+1));
+            $li.appendChild($li);
+        })
+
+        console.log($li.querySelect(#fruit3));
+        document.body.appendChild($ul)
+    </script>
+</head>
+<body>
+    
+</body>
+</html>
